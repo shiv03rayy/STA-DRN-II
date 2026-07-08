@@ -6,6 +6,24 @@ Code for the paper 'Spatial-Temporal Attention Network for Depression Recognitio
 
 ![main figure](figure/fig.png)
 
+## Environment Setup
+
+Requires **Python 3.10**. Clone the repo and install the dependencies into a virtual environment:
+
+```bash
+git clone https://github.com/shiv03rayy/STA-DRN-II.git
+cd STA-DRN-II
+git checkout OG-STA-DRN
+
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+> **GPU note:** `requirements.txt` pins the **CUDA 12.1** builds of PyTorch. If your machine has no NVIDIA GPU, or a different CUDA version, edit `requirements.txt` as described in its comments (remove the `+cu121` suffixes and the `--extra-index-url` line) and install the matching build from [pytorch.org](https://pytorch.org/get-started/locally/).
+
+> **Data & weights:** the trained weights (`weights/best.pth`) are included in the repo, but the datasets are **not** — see [Notes](#notes) below.
+
 ## Pre-process
 
 **(Recommend) Using [OpenFace](https://github.com/TadasBaltrusaitis/OpenFace) to crop the facial frames.**
