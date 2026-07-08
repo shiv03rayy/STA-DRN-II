@@ -14,7 +14,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 DEVICE = torch.device('cuda')
 SCORE_RANGE = 63
 SAMPLE_INTERVAL = 3
-frame_len = 64
+frame_len = 128
 features = 16
 BATCHSIZE = 10
 
