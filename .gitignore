@@ -6,6 +6,10 @@ env/
 # Large dataset (not shareable — see README re: AVEC authorization)
 datasets/
 
+# Training-experiment checkpoints (large binaries). Keep only the published model.
+weights/*
+!weights/best.pth
+
 # Python cache / build artifacts
 __pycache__/
 *.py[cod]
