@@ -11,12 +11,13 @@ from torch.utils.data import DataLoader
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # reduce allocator fragmentation on the 8GB GPU
 DEVICE = torch.device('cuda')
 SCORE_RANGE = 63
 SAMPLE_INTERVAL = 3
 frame_len = 128
 features = 16
-BATCHSIZE = 10
+BATCHSIZE = 2  # clips per forward pass; lower this if you hit CUDA OOM (8GB GPU can't fit 10 x 128-frame clips)
 
 
 # Generate the model.
