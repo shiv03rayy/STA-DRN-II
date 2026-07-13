@@ -38,7 +38,7 @@ PRETRAIN = False
 DATASET = 'avec14'
 SAMPLE_INTERVAL = 3
 optimizer_name = 'Adam'
-lr = 0.000001
+lr = 0.0001
 frame_len = 64
 features = 16
 sigma = 0
@@ -58,8 +58,9 @@ if PRETRAIN:
 
 # Generate the optimizers.
 optimizer = getattr(optim, optimizer_name)(Net.parameters(), lr=lr)
-# scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100], gamma=0.1)
-# scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 50, 2)
+# LR schedule: keep 1e-4 for the fast early descent, then drop 10x at epochs 20 and 40 to refine past the ~epoch-20 plateau.
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)
+# alt smooth decay: scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 50, 2)
 scaler = GradScaler()
 optimizer.zero_grad()
 
@@ -129,7 +130,7 @@ for epoch in range(EPOCHS):
         mean_mae_loss = np.mean(MAE_loss)
         mean_rmse_loss = np.sqrt(np.mean(RMSE_loss))
 
-    # scheduler.step()
+    scheduler.step()
 
     print('Epoch: {:d}  Step: {:d} | '
           'train MAE loss: {:.4f}  RMSE loss: {:.4f} | LR: {:.6f}'.format(
