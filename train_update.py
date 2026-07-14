@@ -2,6 +2,7 @@
 import os
 import csv
 import time
+import wandb
 import torch.nn as nn
 import numpy as np
 import pandas as pd
@@ -49,6 +50,21 @@ TAG = 'avec_publish'
 
 if not os.path.exists(f'weights/{TAG}'):
     os.makedirs(f'weights/{TAG}')
+
+wandb.init(project='STA-DRN-II', name=TAG, config={
+    'dataset': DATASET,
+    'epochs': EPOCHS,
+    'batch_size': BATCHSIZE,
+    'backprop_step': BACKPROP_STEP,
+    'val_step': VAL_STEP,
+    'early_stop_patience': EARLY_STOP_PATIENCE,
+    'optimizer': optimizer_name,
+    'lr': lr,
+    'frame_len': frame_len,
+    'features': features,
+    'sigma': sigma,
+    'sample_interval': SAMPLE_INTERVAL,
+})
 
 # Generate the model.
 Net = stanet_af(layers=[2, 2, 2, 2], in_channels=3, num_classes=1, k=2, features=features)
@@ -138,6 +154,12 @@ for epoch in range(EPOCHS):
           'train MAE loss: {:.4f}  RMSE loss: {:.4f} | LR: {:.6f}'.format(
         epoch+1, (train_size // BATCHSIZE),
         mean_mae_loss, mean_rmse_loss, optimizer.param_groups[0]['lr']))
+    wandb.log({
+        'train/mae': mean_mae_loss,
+        'train/rmse': mean_rmse_loss,
+        'lr': optimizer.param_groups[0]['lr'],
+        'epoch': epoch + 1,
+    }, step=epoch + 1)
 
     if (epoch + 1) % VAL_STEP == 0:
         Net.eval()
@@ -164,6 +186,11 @@ for epoch in range(EPOCHS):
             print('{} val MAE loss: {:.4f}    val RMSE loss: {:.4f}'.format(timestamp, mean_mae_loss, mean_rmse_loss))
 
         torch.save(Net.state_dict(), f'./weights/{TAG}/{epoch + 1}.pth')
+        wandb.log({
+            'val/mae': mean_mae_loss,
+            'val/rmse': mean_rmse_loss,
+            'epoch': epoch + 1,
+        }, step=epoch + 1)
         if mean_mae_loss < best_MAE:
             best_MAE = mean_mae_loss
             epochs_no_improve = 0  # early stopping: improvement -> reset the patience counter
@@ -202,3 +229,8 @@ with open(results_log_path, 'a', newline='') as f:
         writer.writeheader()
     writer.writerow(log_row)
 print(f'Run result appended to {results_log_path}')
+
+wandb.summary['final_epoch'] = epoch + 1
+wandb.summary['early_stopped'] = early_stopped
+wandb.summary['best_val_mae'] = round(best_MAE, 4)
+wandb.finish()

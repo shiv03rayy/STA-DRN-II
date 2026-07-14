@@ -27,3 +27,6 @@ dist/
 
 # Claude Code personal/local settings
 .claude/settings.local.json
+
+# Weights & Biases local run cache/logs (results live on wandb.ai)
+wandb/
