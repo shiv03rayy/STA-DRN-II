@@ -33,7 +33,7 @@ print('=== AVEC 2014 testing ===')
 
 # Get the dataset.
 # the `image_path_list` contains all image frames
-df = pd.read_csv('./datasets/avec14/label.csv')
+df = pd.read_csv('./dataset/avec14.csv')
 image_path_list = df['path'].values
 label_list = df['label'].values
 test_image_path_list = image_path_list[100:]

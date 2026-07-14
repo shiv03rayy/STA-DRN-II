@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import csv
 import time
 import torch.nn as nn
 import numpy as np
@@ -104,6 +105,7 @@ val_loader = DataLoader(val_data, batch_size=1, shuffle=False, num_workers=10,
 best_MAE = float('inf')
 epochs_no_improve = 0  # early stopping: counts consecutive validations without val-MAE improvement
 step_flag = 0
+early_stopped = False
 # Training of the model.
 for epoch in range(EPOCHS):
     Net.train()
@@ -174,4 +176,29 @@ for epoch in range(EPOCHS):
         # early stopping: patience exhausted -> stop training (best.pth already holds the best weights)
         if epochs_no_improve >= EARLY_STOP_PATIENCE:
             print('Early stopping at epoch {:d} | best val MAE: {:.4f}'.format(epoch + 1, best_MAE))
+            early_stopped = True
             break
+
+# Log the final result of this run so multiple runs/tags can be compared later.
+results_log_path = 'results_log.csv'
+log_row = {
+    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())),
+    'tag': TAG,
+    'dataset': DATASET,
+    'final_epoch': epoch + 1,
+    'early_stopped': early_stopped,
+    'best_val_mae': round(best_MAE, 4),
+    'optimizer': optimizer_name,
+    'lr': lr,
+    'batch_size': BATCHSIZE,
+    'frame_len': frame_len,
+    'features': features,
+    'sigma': sigma,
+}
+write_header = not os.path.exists(results_log_path)
+with open(results_log_path, 'a', newline='') as f:
+    writer = csv.DictWriter(f, fieldnames=list(log_row.keys()))
+    if write_header:
+        writer.writeheader()
+    writer.writerow(log_row)
+print(f'Run result appended to {results_log_path}')
