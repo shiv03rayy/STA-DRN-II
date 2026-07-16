@@ -1,0 +1,2 @@
+timestamp,tag,dataset,final_epoch,early_stopped,best_val_mae,optimizer,lr,batch_size,frame_len,features,sigma
+2026-07-14 16:25:35,avec_publish,avec14,110,True,13.486,Adam,0.0001,5,64,16,0

@@ -29,10 +29,11 @@ def distributed_label(true_labels, classes, sigma=0.0):
 torch.backends.cudnn.benchmark=True
 torch.multiprocessing.set_sharing_strategy('file_system')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # reduce allocator fragmentation on the 8GB GPU
 DEVICE = torch.device('cuda')
-BATCHSIZE = 5
+BATCHSIZE = 1  # clips per forward pass; features=64 at 8GB needs a tiny micro-batch, effective batch recovered via BACKPROP_STEP
 EPOCHS = 500
-BACKPROP_STEP = 10
+BACKPROP_STEP = 50  # effective batch = BATCHSIZE * BACKPROP_STEP ~= 50
 VAL_STEP = 10
 EARLY_STOP_PATIENCE = 5  # early stopping: stop after this many consecutive validations with no val-MAE improvement (each validation = VAL_STEP epochs, so 5 -> 50 epochs of no progress)
 SCORE_RANGE = 63
@@ -42,10 +43,10 @@ SAMPLE_INTERVAL = 3
 optimizer_name = 'Adam'
 lr = 0.0001
 frame_len = 64
-features = 16
+features = 64
 sigma = 0
 
-TAG = 'avec_publish'
+TAG = 'avec_features64'
 
 
 if not os.path.exists(f'weights/{TAG}'):

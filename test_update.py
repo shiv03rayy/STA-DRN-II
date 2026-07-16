@@ -16,13 +16,13 @@ DEVICE = torch.device('cuda')
 SCORE_RANGE = 63
 SAMPLE_INTERVAL = 3
 frame_len = 128
-features = 16
+features = 64
 BATCHSIZE = 2  # clips per forward pass; lower this if you hit CUDA OOM (8GB GPU can't fit 10 x 128-frame clips)
 
 
 # Generate the model.
 Net = stanet_af(layers=[2, 2, 2, 2], in_channels=3, num_classes=1, k=2, features=features)
-Net.load_state_dict(torch.load(f'weights/best.pth', weights_only=True, map_location=DEVICE))
+Net.load_state_dict(torch.load(f'weights/avec_features64/best.pth', weights_only=True, map_location=DEVICE))
 Net = Net.to(DEVICE)
 
 # loss function

@@ -30,3 +30,4 @@ dist/
 
 # Weights & Biases local run cache/logs (results live on wandb.ai)
 wandb/
+dataset/avec14/image/datasets
