@@ -30,4 +30,7 @@ dist/
 
 # Weights & Biases local run cache/logs (results live on wandb.ai)
 wandb/
+
+# Per-run stdout from the runs.sh queue
+logs/
 dataset/avec14/image/datasets

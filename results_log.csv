@@ -1,3 +1,3 @@
-timestamp,tag,dataset,final_epoch,early_stopped,best_val_mae,optimizer,lr,batch_size,frame_len,features,sigma,norm
-2026-07-14 16:25:35,avec_publish,avec14,110,True,13.486,Adam,0.0001,5,64,16,0
-2026-07-21 12:57:48,avec_features32_gn,avec14,90,True,9.2421,Adam,0.0001,1,64,32,0,groupnorm
+timestamp,tag,dataset,final_epoch,early_stopped,best_val_mae,optimizer,lr,lr_schedule,lr_t_max,batch_size,backprop_step,frame_len,features,sigma,norm
+2026-07-14 16:25:35,avec_publish,avec14,110,True,13.486,Adam,0.0001,MultiStepLR,,5,10,64,16,0,batchnorm
+2026-07-21 12:57:48,avec_features32_gn,avec14,90,True,9.2421,Adam,0.0001,MultiStepLR,,1,50,64,32,0,groupnorm

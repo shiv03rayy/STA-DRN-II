@@ -31,32 +31,65 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # reduce allocator fragmentation on the 8GB GPU
 DEVICE = torch.device('cuda')
-BATCHSIZE = 1  # clips per forward pass; 8GB caps us here, effective batch recovered via BACKPROP_STEP.
-               # Note this makes BatchNorm unusable -- see norm_layer below.
-EPOCHS = 500
-BACKPROP_STEP = 50  # effective batch = BATCHSIZE * BACKPROP_STEP ~= 50
-VAL_STEP = 10
-EARLY_STOP_PATIENCE = 5  # early stopping: stop after this many consecutive validations with no val-MAE improvement (each validation = VAL_STEP epochs, so 5 -> 50 epochs of no progress)
+
+# Every hyperparameter below can be overridden by an environment variable of the same name,
+# so a queue script (runs.sh) can run a sweep back-to-back without editing this file.
+# The defaults are the values the run in results_log.csv used -- running with no env vars set
+# reproduces that run exactly.
+_env = os.environ.get
+
+
+def _env_int(name, default):
+    return int(_env(name, default))
+
+
+def _env_float(name, default):
+    return float(_env(name, default))
+
+
+BATCHSIZE = _env_int('BATCHSIZE', 1)  # clips per forward pass; 8GB caps us here, effective batch recovered via BACKPROP_STEP.
+                                      # Note this makes BatchNorm unusable -- see NORM below.
+EPOCHS = _env_int('EPOCHS', 500)
+BACKPROP_STEP = _env_int('BACKPROP_STEP', 50)  # effective batch = BATCHSIZE * BACKPROP_STEP ~= 50
+VAL_STEP = _env_int('VAL_STEP', 10)
+EARLY_STOP_PATIENCE = _env_int('EARLY_STOP_PATIENCE', 5)  # early stopping: stop after this many consecutive validations with no val-MAE improvement (each validation = VAL_STEP epochs, so 5 -> 50 epochs of no progress)
 SCORE_RANGE = 63
 PRETRAIN = False
-DATASET = 'avec14'
-SAMPLE_INTERVAL = 3
-optimizer_name = 'Adam'
-lr = 0.0001
-LR_T_MAX = 100  # cosine anneals lr -> ~0 over this many epochs; set it to the expected run length, not EPOCHS
-                # (runs so far early-stopped at 90 and 110). Past LR_T_MAX the cosine would climb back toward
-                # lr, so the scheduler is frozen there -- see the stepping guard in the training loop.
-LR_ETA_MIN = 1e-6  # floor, so a run that outlives LR_T_MAX holds a tiny lr rather than a hard 0 (frozen model)
-frame_len = 64
-features = 32  # 64 OOMs the 8GB GPU
-sigma = 0
-norm = 'groupnorm'
+DATASET = _env('DATASET', 'avec14')
+SAMPLE_INTERVAL = _env_int('SAMPLE_INTERVAL', 3)
+optimizer_name = _env('OPTIMIZER', 'Adam')
+lr = _env_float('LR', 0.0001)
+LR_T_MAX = _env_int('LR_T_MAX', 100)  # cosine anneals lr -> ~0 over this many epochs; set it to the expected run length, not EPOCHS
+                                      # (runs so far early-stopped at 90 and 110). Past LR_T_MAX the cosine would climb back toward
+                                      # lr, so the scheduler is frozen there -- see the stepping guard in the training loop.
+LR_ETA_MIN = _env_float('LR_ETA_MIN', 1e-6)  # floor, so a run that outlives LR_T_MAX holds a tiny lr rather than a hard 0 (frozen model)
+frame_len = _env_int('FRAME_LEN', 64)
+features = _env_int('FEATURES', 32)  # 64 OOMs the 8GB GPU
+sigma = _env_float('SIGMA', 0)
+norm = _env('NORM', 'groupnorm')
+GROUP_NORM_GROUPS = _env_int('GROUP_NORM_GROUPS', 8)
 
-TAG = 'avec_features32_gn'
+# norm actually selects the norm layer -- previously it was logged but the layer was hardcoded,
+# so a sweep over NORM would have silently trained groupnorm every time.
+if norm == 'groupnorm':
+    NORM_LAYER = group_norm_3d(GROUP_NORM_GROUPS)
+elif norm == 'batchnorm':
+    NORM_LAYER = nn.BatchNorm3d  # only sane at BATCHSIZE > 1; see the docstring on group_norm_3d
+else:
+    raise ValueError(f"NORM must be 'groupnorm' or 'batchnorm', got {norm!r}")
 
+# Default tag encodes the config, so queued runs never collide by accident.
+TAG = _env('TAG', f'{DATASET}_f{features}_lr{lr:g}_fl{frame_len}_s{sigma:g}_{norm}')
 
-if not os.path.exists(f'weights/{TAG}'):
-    os.makedirs(f'weights/{TAG}')
+# A second run under the same tag would overwrite the first one's best.pth, so take the next
+# free suffix instead of silently destroying a finished run's weights.
+if os.path.exists(f'weights/{TAG}'):
+    _base, _n = TAG, 2
+    while os.path.exists(f'weights/{TAG}'):
+        TAG, _n = f'{_base}_run{_n}', _n + 1
+    print(f'weights/{_base} already exists, using tag {TAG} instead')
+os.makedirs(f'weights/{TAG}')
+print(f'=== run tag: {TAG} ===')
 
 wandb.init(project='STA-DRN-II', name=TAG, config={
     'dataset': DATASET,
@@ -81,7 +114,7 @@ wandb.init(project='STA-DRN-II', name=TAG, config={
 # GroupNorm rather than the default BatchNorm3d: at BATCHSIZE=1 the BN running stats are
 # estimated from single clips, so eval() predictions diverged wildly from train().
 Net = stanet_af(layers=[2, 2, 2, 2], in_channels=3, num_classes=1, k=2, features=features,
-                norm_layer=group_norm_3d(8))
+                norm_layer=NORM_LAYER)
 # Net = torch.nn.DataParallel(Net)
 Net = Net.to(DEVICE)
 if PRETRAIN:
@@ -235,16 +268,32 @@ log_row = {
     'best_val_mae': round(best_MAE, 4),
     'optimizer': optimizer_name,
     'lr': lr,
+    'lr_schedule': type(scheduler).__name__,  # read off the scheduler, not a hardcoded string: the CSV
+                                              # previously recorded no schedule at all, and two runs that
+                                              # differed only by MultiStepLR vs cosine looked identical here
+    'lr_t_max': LR_T_MAX,
     'batch_size': BATCHSIZE,
+    'backprop_step': BACKPROP_STEP,
     'frame_len': frame_len,
     'features': features,
     'sigma': sigma,
     'norm': norm,
 }
-write_header = not os.path.exists(results_log_path)
+# Align to the header already on disk rather than assuming it matches log_row: a row written under a
+# different column set would land misaligned and silently corrupt every earlier row's meaning.
+if os.path.exists(results_log_path):
+    with open(results_log_path, newline='') as f:
+        fieldnames = next(csv.reader(f), list(log_row.keys()))
+    missing = [k for k in log_row if k not in fieldnames]
+    if missing:
+        print(f'WARNING: {results_log_path} has no column(s) for {missing}; '
+              f'those values are not being recorded. Widen the header to keep them.')
+else:
+    fieldnames = list(log_row.keys())
 with open(results_log_path, 'a', newline='') as f:
-    writer = csv.DictWriter(f, fieldnames=list(log_row.keys()))
-    if write_header:
+    # restval='' fills columns this run has no value for; extrasaction='ignore' drops (already warned) extras
+    writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
+    if f.tell() == 0:
         writer.writeheader()
     writer.writerow(log_row)
 print(f'Run result appended to {results_log_path}')
