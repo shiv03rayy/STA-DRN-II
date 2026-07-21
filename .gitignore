@@ -1,0 +1,33 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Large dataset (not shareable — see README re: AVEC authorization)
+datasets/
+
+# Training-experiment checkpoints (large binaries). Keep only the published model.
+weights/*
+!weights/best.pth
+
+# Python cache / build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.ipynb_checkpoints/
+build/
+dist/
+*.egg-info/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude Code personal/local settings
+.claude/settings.local.json
+
+# Weights & Biases local run cache/logs (results live on wandb.ai)
+wandb/
+dataset/avec14/image/datasets

@@ -1,0 +1,26 @@
+# requirements.txt — STA-DRN
+# Tested with Python 3.10 (this environment: 3.10.12)
+#
+# Install:
+#   python -m venv .venv
+#   source .venv/bin/activate      # Windows: .venv\Scripts\activate
+#   pip install -r requirements.txt
+#
+# GPU note: torch/torchvision below are CUDA 12.1 builds (the "+cu121" suffix).
+# The --extra-index-url line lets pip fetch those wheels from PyTorch's index.
+#
+# If the other machine has NO NVIDIA GPU (e.g. a laptop/Mac) or a different
+# CUDA version: delete the "+cu121" suffixes AND the --extra-index-url line,
+# then follow https://pytorch.org/get-started/locally/ for the right build.
+
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchkeras==4.0.5
+
+numpy==2.2.6
+pandas==2.3.3
+opencv-python==5.0.0.93
+pillow==12.2.0
+wandb==0.28.0

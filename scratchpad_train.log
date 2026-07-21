@@ -1,0 +1,14 @@
+/home/campus.ncl.ac.uk/c5061908/Desktop/STA-DRN-main/train_update.py:114: DeprecationWarning: __array_wrap__ must accept context and return_scalar arguments (positionally) in the future. (Deprecated NumPy 2.0)
+  train_label = train_label + np.random.normal(0, sigma, train_label.shape[0])
+Epoch: 1  Step: 20 | train MAE loss: 38.4181  RMSE loss: 49.4973 | LR: 0.000001
+Epoch: 2  Step: 20 | train MAE loss: 37.6152  RMSE loss: 47.4482 | LR: 0.000001
+Epoch: 3  Step: 20 | train MAE loss: 37.4279  RMSE loss: 47.7694 | LR: 0.000001
+Epoch: 4  Step: 20 | train MAE loss: 36.8748  RMSE loss: 45.8434 | LR: 0.000001
+Epoch: 5  Step: 20 | train MAE loss: 37.3081  RMSE loss: 45.4308 | LR: 0.000001
+Epoch: 6  Step: 20 | train MAE loss: 37.5820  RMSE loss: 45.5833 | LR: 0.000001
+Epoch: 7  Step: 20 | train MAE loss: 35.5813  RMSE loss: 44.4621 | LR: 0.000001
+Epoch: 8  Step: 20 | train MAE loss: 36.5419  RMSE loss: 45.0815 | LR: 0.000001
+Epoch: 9  Step: 20 | train MAE loss: 35.9261  RMSE loss: 43.1982 | LR: 0.000001
+Epoch: 10  Step: 20 | train MAE loss: 35.2142  RMSE loss: 43.1176 | LR: 0.000001
+2026-07-08-14_55_33 val MAE loss: 35.1801    val RMSE loss: 55.3537
+Best MAE: 35.1801, model saved!
