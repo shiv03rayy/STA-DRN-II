@@ -29,6 +29,28 @@ def smooth_one_hot(true_labels, classes, smoothing=0.0):
     return true_dist
 
 
+def resolve_image_path(img_path, dataset):
+    """Locate the directory of frames for one video.
+
+    generate_label_csv.py writes paths that are already relative to the repo root
+    (datasets/avec14/train/Freeform/...), so those are used as-is. The branches below are
+    the legacy layout, where the CSV held a bare video filename.
+    """
+    if os.path.isdir(img_path):
+        return img_path
+
+    if dataset == 'avec14':
+        return os.path.join('dataset', 'avec14', 'image', img_path.replace('.mp4', '_aligned'))
+    elif dataset == 'avec13':
+        return os.path.join('dataset', 'avec13', 'image', img_path.replace('.mp4', '_aligned'))
+    elif dataset == 'ucf101':
+        return os.path.join('dataset', 'ucf101', 'ucf101_jpegs_256', img_path)
+    elif dataset == 'ck+':
+        return os.path.join('dataset', 'CK+', 'image_cropped', img_path)
+    else:
+        return os.path.join('dataset', 'YouTube_Faces', 'aligned_cropped', img_path)
+
+
 class MainDataset(Dataset):
 
     def __init__(self, img_path, label_value, dataset,
@@ -49,16 +71,7 @@ class MainDataset(Dataset):
 
         label = self.label_value[idx]
 
-        if self.dataset == 'avec14':
-            image_path = os.path.join('dataset', 'avec14', 'image', self.img_path[idx].replace('.mp4', '_aligned'))
-        elif self.dataset == 'avec13':
-            image_path = os.path.join('dataset', 'avec13', 'image', self.img_path[idx].replace('.mp4', '_aligned'))
-        elif self.dataset == 'ucf101':
-            image_path = os.path.join('dataset', 'ucf101', 'ucf101_jpegs_256', self.img_path[idx])
-        elif self.dataset == 'ck+':
-            image_path = os.path.join('dataset', 'CK+', 'image_cropped', self.img_path[idx])
-        else:
-            image_path = os.path.join('dataset', 'YouTube_Faces', 'aligned_cropped', self.img_path[idx])
+        image_path = resolve_image_path(self.img_path[idx], self.dataset)
 
         image_name = os.listdir(image_path)
         # if self.dataset == 'avec14':
@@ -122,16 +135,7 @@ class ValDataset(Dataset):
 
         label = self.label_value[idx]
 
-        if self.dataset == 'avec14':
-            image_path = os.path.join('dataset', 'avec14', 'image', self.img_path[idx].replace('.mp4', '_aligned'))
-        elif self.dataset == 'avec13':
-            image_path = os.path.join('dataset', 'avec13', 'image', self.img_path[idx].replace('.mp4', '_aligned'))
-        elif self.dataset == 'ucf101':
-            image_path = os.path.join('dataset', 'ucf101', 'ucf101_jpegs_256', self.img_path[idx])
-        elif self.dataset == 'ck+':
-            image_path = os.path.join('dataset', 'CK+', 'image_cropped', self.img_path[idx])
-        else:
-            image_path = os.path.join('dataset', 'YouTube_Faces', 'aligned_cropped', self.img_path[idx])
+        image_path = resolve_image_path(self.img_path[idx], self.dataset)
 
         image_name = os.listdir(image_path)
         # if self.dataset == 'avec14':

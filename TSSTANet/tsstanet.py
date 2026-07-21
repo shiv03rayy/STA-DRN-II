@@ -3,7 +3,19 @@ import torch.nn as nn
 
 from TSSTANet.basic_block import SpatialBlock, TemporalBlock, SpatiotemporalBlock, AttentionSpatiotemporalBlock
 
-__all__ = ['tanet', 'sanet', 'stanet', 'stanet_af']
+__all__ = ['tanet', 'sanet', 'stanet', 'stanet_af', 'group_norm_3d']
+
+
+def group_norm_3d(num_groups=8):
+    """Batch-size-independent norm_layer, for training with a batch of 1 clip.
+
+    BatchNorm3d normalizes a batch-of-1 by that single clip's own statistics, so its
+    running_mean/var are never a usable estimate and eval() output diverges from train().
+    GroupNorm uses the same statistics in both modes.
+    """
+    def _norm(num_channels):
+        return nn.GroupNorm(min(num_groups, num_channels), num_channels)
+    return _norm
 
 
 def conv1x1(in_planes, out_planes, stride=1):
@@ -31,7 +43,8 @@ class Bottleneck(nn.Module):
         self.bn1 = norm_layer(width)
 
         self.conv2 = module(in_channels=width, inner_channels=width, kernel_size=3,
-                            stride=stride, padding=padding, dilation=dilation, k=k)
+                            stride=stride, padding=padding, dilation=dilation, k=k,
+                            norm_layer=norm_layer)
         self.bn2 = norm_layer(width)
         self.conv3 = conv1x1(width, planes * self.expansion)
 
@@ -105,7 +118,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm3d):
+            elif isinstance(m, (nn.BatchNorm3d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 

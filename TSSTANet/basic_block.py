@@ -17,13 +17,16 @@ class SpatialBlock(nn.Module):
             k (int): inner groups
         """
 
-    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2):
+    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2,
+                 norm_layer=None):
         super(SpatialBlock, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm3d
         self.k = k
 
         self.group_conv = nn.Conv3d(in_channels, inner_channels, kernel_size,
                                     stride, padding, dilation, groups=k)
-        self.bn = nn.BatchNorm3d(inner_channels)
+        self.bn = norm_layer(inner_channels)
         self.relu = nn.ReLU(inplace=True)
 
         self.adaptive_pool = nn.AdaptiveAvgPool3d((1, None, None))
@@ -51,13 +54,16 @@ class TemporalBlock(nn.Module):
         inner_channels (int): the dim of total tensor among k-group
         k (int): inner groups
     """
-    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2):
+    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2,
+                 norm_layer=None):
         super(TemporalBlock, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm3d
         self.k = k
 
         self.group_conv = nn.Conv3d(in_channels, inner_channels, kernel_size,
                                     stride=stride, padding=padding, dilation=dilation, groups=k)
-        self.bn = nn.BatchNorm3d(inner_channels)
+        self.bn = norm_layer(inner_channels)
         self.relu = nn.ReLU(inplace=True)
 
         self.adaptive_pool = nn.AdaptiveAvgPool3d((None, 1, 1))
@@ -87,15 +93,18 @@ class SpatiotemporalBlock(nn.Module):
         inner_channels (int): the dim of total tensor among k-group in temporalBlock
         k (int): inner groups of each block
     """
-    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2):
+    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2,
+                 norm_layer=None):
         super(SpatiotemporalBlock, self).__init__()
         self.k = k
         self.temporal_block = TemporalBlock(in_channels=in_channels, inner_channels=inner_channels,
                                             kernel_size=kernel_size, stride=stride,
-                                            padding=padding, dilation=dilation, k=k)
+                                            padding=padding, dilation=dilation, k=k,
+                                            norm_layer=norm_layer)
         self.spatial_block = SpatialBlock(in_channels=in_channels, inner_channels=inner_channels,
                                           kernel_size=kernel_size, stride=stride,
-                                          padding=padding, dilation=dilation, k=k)
+                                          padding=padding, dilation=dilation, k=k,
+                                          norm_layer=norm_layer)
 
     def forward(self, x):
         x_t = self.temporal_block(x)
@@ -116,21 +125,24 @@ class AttentionSpatiotemporalBlock(nn.Module):
         k (int): inner groups of each block
     """
 
-    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2):
+    def __init__(self, in_channels, inner_channels, kernel_size, stride, padding, dilation, k=2,
+                 norm_layer=None):
         super(AttentionSpatiotemporalBlock, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm3d
         self.k = k
 
         # temporal block before attention vector
         self.group_conv_temporal = nn.Conv3d(in_channels, inner_channels, kernel_size,
                                              stride, padding, dilation, groups=k)
-        self.bn_temporal = nn.BatchNorm3d(inner_channels)
+        self.bn_temporal = norm_layer(inner_channels)
         self.adaptive_pool_temporal = nn.AdaptiveAvgPool3d((None, 1, 1))
         self.fc_temporal = nn.Conv3d(inner_channels, inner_channels, kernel_size=1, groups=k)
 
         # spatial block before attention vector
         self.group_conv_spatial = nn.Conv3d(in_channels, inner_channels, kernel_size,
                                             stride, padding, dilation, groups=k)
-        self.bn_spatial = nn.BatchNorm3d(inner_channels)
+        self.bn_spatial = norm_layer(inner_channels)
         self.adaptive_pool_spatial = nn.AdaptiveAvgPool3d((1, None, None))
         self.fc_spatial = nn.Conv3d(inner_channels, inner_channels, 1, groups=k)
 

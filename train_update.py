@@ -6,7 +6,7 @@ import wandb
 import torch.nn as nn
 import numpy as np
 import pandas as pd
-from TSSTANet.tsstanet import stanet_af
+from TSSTANet.tsstanet import stanet_af, group_norm_3d
 import torch.optim as optim
 import torch.utils.data
 from torch.amp import autocast, GradScaler
@@ -31,7 +31,8 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # reduce allocator fragmentation on the 8GB GPU
 DEVICE = torch.device('cuda')
-BATCHSIZE = 1  # clips per forward pass; features=64 at 8GB needs a tiny micro-batch, effective batch recovered via BACKPROP_STEP
+BATCHSIZE = 1  # clips per forward pass; 8GB caps us here, effective batch recovered via BACKPROP_STEP.
+               # Note this makes BatchNorm unusable -- see norm_layer below.
 EPOCHS = 500
 BACKPROP_STEP = 50  # effective batch = BATCHSIZE * BACKPROP_STEP ~= 50
 VAL_STEP = 10
@@ -43,10 +44,11 @@ SAMPLE_INTERVAL = 3
 optimizer_name = 'Adam'
 lr = 0.0001
 frame_len = 64
-features = 64
+features = 32  # 64 OOMs the 8GB GPU
 sigma = 0
+norm = 'groupnorm'
 
-TAG = 'avec_features64'
+TAG = 'avec_features32_gn'
 
 
 if not os.path.exists(f'weights/{TAG}'):
@@ -64,11 +66,15 @@ wandb.init(project='STA-DRN-II', name=TAG, config={
     'frame_len': frame_len,
     'features': features,
     'sigma': sigma,
+    'norm': norm,
     'sample_interval': SAMPLE_INTERVAL,
 })
 
 # Generate the model.
-Net = stanet_af(layers=[2, 2, 2, 2], in_channels=3, num_classes=1, k=2, features=features)
+# GroupNorm rather than the default BatchNorm3d: at BATCHSIZE=1 the BN running stats are
+# estimated from single clips, so eval() predictions diverged wildly from train().
+Net = stanet_af(layers=[2, 2, 2, 2], in_channels=3, num_classes=1, k=2, features=features,
+                norm_layer=group_norm_3d(8))
 # Net = torch.nn.DataParallel(Net)
 Net = Net.to(DEVICE)
 if PRETRAIN:
@@ -170,8 +176,9 @@ for epoch in range(EPOCHS):
             for step, (val_img_pack, val_label) in enumerate(val_loader):
                 predict_list = []
                 for val_img_idx in range(0, val_img_pack.size(1), BATCHSIZE):
-                    predict = Net(val_img_pack[:, val_img_idx:val_img_idx + BATCHSIZE, :, :, :].to(DEVICE).squeeze(0))
-                    predict = torch.relu(predict) * SCORE_RANGE
+                    with autocast('cuda'):  # match the training forward pass
+                        predict = Net(val_img_pack[:, val_img_idx:val_img_idx + BATCHSIZE, :, :, :].to(DEVICE).squeeze(0))
+                    predict = torch.relu(predict.float()) * SCORE_RANGE
                     predict = predict.view(predict.size(0))
                     predict_list.append(predict.mean().cpu())
                 predict = torch.tensor(np.mean(predict_list)).unsqueeze(dim=0)  # mean value as final score of one video
@@ -222,6 +229,7 @@ log_row = {
     'frame_len': frame_len,
     'features': features,
     'sigma': sigma,
+    'norm': norm,
 }
 write_header = not os.path.exists(results_log_path)
 with open(results_log_path, 'a', newline='') as f:
