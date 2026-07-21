@@ -43,6 +43,10 @@ DATASET = 'avec14'
 SAMPLE_INTERVAL = 3
 optimizer_name = 'Adam'
 lr = 0.0001
+LR_T_MAX = 100  # cosine anneals lr -> ~0 over this many epochs; set it to the expected run length, not EPOCHS
+                # (runs so far early-stopped at 90 and 110). Past LR_T_MAX the cosine would climb back toward
+                # lr, so the scheduler is frozen there -- see the stepping guard in the training loop.
+LR_ETA_MIN = 1e-6  # floor, so a run that outlives LR_T_MAX holds a tiny lr rather than a hard 0 (frozen model)
 frame_len = 64
 features = 32  # 64 OOMs the 8GB GPU
 sigma = 0
@@ -63,6 +67,9 @@ wandb.init(project='STA-DRN-II', name=TAG, config={
     'early_stop_patience': EARLY_STOP_PATIENCE,
     'optimizer': optimizer_name,
     'lr': lr,
+    'lr_schedule': 'CosineAnnealingLR',
+    'lr_t_max': LR_T_MAX,
+    'lr_eta_min': LR_ETA_MIN,
     'frame_len': frame_len,
     'features': features,
     'sigma': sigma,
@@ -82,9 +89,11 @@ if PRETRAIN:
 
 # Generate the optimizers.
 optimizer = getattr(optim, optimizer_name)(Net.parameters(), lr=lr)
-# LR schedule: keep 1e-4 for the fast early descent, then drop 10x at epochs 20 and 40 to refine past the ~epoch-20 plateau.
-scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)
-# alt smooth decay: scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 50, 2)
+# LR schedule: smooth cosine decay from lr to ~0 over LR_T_MAX epochs.
+# Replaces MultiStepLR(milestones=[20, 40]), which cut the lr 10x at epoch 20 and again at 40 while val MAE
+# was still improving at every validation (15.99 -> 10.46 -> 9.61 -> 9.24 at epochs 10/20/30/40); val MAE then
+# drifted upward for the rest of the run at lr=1e-6. The assumed epoch-20 plateau was not in the data.
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=LR_T_MAX, eta_min=LR_ETA_MIN)
 scaler = GradScaler()
 optimizer.zero_grad()
 
@@ -155,7 +164,8 @@ for epoch in range(EPOCHS):
         mean_mae_loss = np.mean(MAE_loss)
         mean_rmse_loss = np.sqrt(np.mean(RMSE_loss))
 
-    scheduler.step()
+    if scheduler.last_epoch < LR_T_MAX:  # past T_max the cosine turns back upward; hold the floor instead
+        scheduler.step()
 
     print('Epoch: {:d}  Step: {:d} | '
           'train MAE loss: {:.4f}  RMSE loss: {:.4f} | LR: {:.6f}'.format(
