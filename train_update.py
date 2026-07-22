@@ -57,12 +57,15 @@ SCORE_RANGE = 63
 PRETRAIN = False
 DATASET = _env('DATASET', 'avec14')
 SAMPLE_INTERVAL = _env_int('SAMPLE_INTERVAL', 3)
-optimizer_name = _env('OPTIMIZER', 'Adam')
+optimizer_name = _env('OPTIMIZER', 'Adam')  # any torch.optim class, e.g. Adam or AdamW (AdamW gives decoupled weight decay)
+WEIGHT_DECAY = _env_float('WEIGHT_DECAY', 0)  # regularization; 0 = off, as every run so far. With OPTIMIZER=AdamW this is decoupled decay
 lr = _env_float('LR', 0.0001)
-LR_T_MAX = _env_int('LR_T_MAX', 100)  # cosine anneals lr -> ~0 over this many epochs; set it to the expected run length, not EPOCHS
-                                      # (runs so far early-stopped at 90 and 110). Past LR_T_MAX the cosine would climb back toward
-                                      # lr, so the scheduler is frozen there -- see the stepping guard in the training loop.
-LR_ETA_MIN = _env_float('LR_ETA_MIN', 1e-6)  # floor, so a run that outlives LR_T_MAX holds a tiny lr rather than a hard 0 (frozen model)
+LR_SCHEDULE = _env('LR_SCHEDULE', 'cosine')  # 'cosine' (current default) or 'multistep' (step decay -- reached 9.24, beat cosine's 9.97)
+LR_T_MAX = _env_int('LR_T_MAX', 100)  # cosine only: anneals lr -> LR_ETA_MIN over this many epochs. Past it the cosine would climb
+                                      # back toward lr, so the stepping guard in the training loop freezes it at the floor.
+LR_ETA_MIN = _env_float('LR_ETA_MIN', 1e-6)  # cosine only: lr floor, so a run outliving LR_T_MAX holds a tiny lr rather than a hard 0
+MILESTONES = [int(x) for x in _env('MILESTONES', '20,40').split(',')]  # multistep only: epochs at which lr is multiplied by GAMMA
+GAMMA = _env_float('GAMMA', 0.1)  # multistep only: lr multiplier applied at each milestone
 frame_len = _env_int('FRAME_LEN', 64)
 features = _env_int('FEATURES', 32)  # 64 OOMs the 8GB GPU
 sigma = _env_float('SIGMA', 0)
@@ -100,9 +103,12 @@ wandb.init(project='STA-DRN-II', name=TAG, config={
     'early_stop_patience': EARLY_STOP_PATIENCE,
     'optimizer': optimizer_name,
     'lr': lr,
-    'lr_schedule': 'CosineAnnealingLR',
+    'weight_decay': WEIGHT_DECAY,
+    'lr_schedule': LR_SCHEDULE,
     'lr_t_max': LR_T_MAX,
     'lr_eta_min': LR_ETA_MIN,
+    'milestones': MILESTONES,
+    'gamma': GAMMA,
     'frame_len': frame_len,
     'features': features,
     'sigma': sigma,
@@ -121,12 +127,17 @@ if PRETRAIN:
     Net.load_state_dict(torch.load('weights/avec_all_train/100.pth', weights_only=True, map_location=DEVICE))
 
 # Generate the optimizers.
-optimizer = getattr(optim, optimizer_name)(Net.parameters(), lr=lr)
-# LR schedule: smooth cosine decay from lr to ~0 over LR_T_MAX epochs.
-# Replaces MultiStepLR(milestones=[20, 40]), which cut the lr 10x at epoch 20 and again at 40 while val MAE
-# was still improving at every validation (15.99 -> 10.46 -> 9.61 -> 9.24 at epochs 10/20/30/40); val MAE then
-# drifted upward for the rest of the run at lr=1e-6. The assumed epoch-20 plateau was not in the data.
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=LR_T_MAX, eta_min=LR_ETA_MIN)
+optimizer = getattr(optim, optimizer_name)(Net.parameters(), lr=lr, weight_decay=WEIGHT_DECAY)
+# LR schedule, selectable so the queue can A/B the two:
+#   cosine    -- smooth decay lr -> LR_ETA_MIN over LR_T_MAX epochs
+#   multistep -- cut lr by GAMMA at each MILESTONES epoch. This reached 9.24; cosine trailed it at 9.97 on the
+#                same config, so multistep is the current best schedule despite being the older one.
+if LR_SCHEDULE == 'cosine':
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=LR_T_MAX, eta_min=LR_ETA_MIN)
+elif LR_SCHEDULE == 'multistep':
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=MILESTONES, gamma=GAMMA)
+else:
+    raise ValueError(f"LR_SCHEDULE must be 'cosine' or 'multistep', got {LR_SCHEDULE!r}")
 scaler = GradScaler()
 optimizer.zero_grad()
 
@@ -197,7 +208,8 @@ for epoch in range(EPOCHS):
         mean_mae_loss = np.mean(MAE_loss)
         mean_rmse_loss = np.sqrt(np.mean(RMSE_loss))
 
-    if scheduler.last_epoch < LR_T_MAX:  # past T_max the cosine turns back upward; hold the floor instead
+    # cosine turns back upward past T_max, so freeze it at the floor there; multistep is monotonic -- always step it
+    if LR_SCHEDULE == 'multistep' or scheduler.last_epoch < LR_T_MAX:
         scheduler.step()
 
     print('Epoch: {:d}  Step: {:d} | '
@@ -268,10 +280,12 @@ log_row = {
     'best_val_mae': round(best_MAE, 4),
     'optimizer': optimizer_name,
     'lr': lr,
+    'weight_decay': WEIGHT_DECAY,
     'lr_schedule': type(scheduler).__name__,  # read off the scheduler, not a hardcoded string: the CSV
                                               # previously recorded no schedule at all, and two runs that
                                               # differed only by MultiStepLR vs cosine looked identical here
-    'lr_t_max': LR_T_MAX,
+    'lr_t_max': LR_T_MAX if LR_SCHEDULE == 'cosine' else '',              # cosine-only knob; blank for multistep
+    'milestones': ','.join(map(str, MILESTONES)) if LR_SCHEDULE == 'multistep' else '',  # multistep-only knob
     'batch_size': BATCHSIZE,
     'backprop_step': BACKPROP_STEP,
     'frame_len': frame_len,

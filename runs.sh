@@ -22,21 +22,24 @@ LOGDIR=logs
 mkdir -p "$LOGDIR"
 
 QUEUE=(
-  # 1. Baseline: f32 under cosine annealing. Identical to the 9.2421 row in results_log.csv
-  #    except for the schedule, so it isolates cosine vs MultiStepLR. Runs 2-6 are read
-  #    against this, not against the older step-decay rows.
-  "LR_T_MAX=100"
-  # 2. Capacity control. The f16 row used BatchNorm at batch 5, so the 13.486 -> 9.2421 gap
-  #    confounds capacity with the BN->GN fix; this run is f16 under today's setup.
-  "FEATURES=16 LR_T_MAX=100"
-  # 3. Capacity up. ~6.5GB predicted against 8192MiB -- if it OOMs it fails fast.
-  "FEATURES=48 LR_T_MAX=100"
-  # 4. Label smoothing (SIGMA feeds the label noise at line ~215). Zero in every run so far.
-  "SIGMA=2 LR_T_MAX=100"
-  # 5. Base LR. Under step decay 1e-4 only applied for 20 epochs, so it was never really tested.
-  "LR=3e-4 LR_T_MAX=100"
-  # 6. Width vs temporal context: f64 only fits at 8GB with the clip halved.
-  "FEATURES=64 FRAME_LEN=32 LR_T_MAX=100"
+  # All f32/GroupNorm (capacity is settled) and all on multistep step decay (the schedule that reached
+  # 9.24 and beat cosine's 9.97). Tonight's question: can the levers that helped under cosine break 9.24
+  # once they run on the better schedule? Explicit TAGs keep the runs self-documenting and collision-free.
+
+  # 1. Reproduce the 9.24 champion: step decay, sigma 0, lr 1e-4. Confirms 9.24 is real (single seed so far)
+  #    AND is the control that runs 2-4 are measured against.
+  "TAG=f32_multistep_baseline LR_SCHEDULE=multistep"
+  # 2. Best lever (label smoothing) on the best schedule. Top candidate to beat 9.24.
+  "TAG=f32_multistep_sigma2 LR_SCHEDULE=multistep SIGMA=2"
+  # 3. Second lever (higher base lr) on the best schedule.
+  "TAG=f32_multistep_lr3e-4 LR_SCHEDULE=multistep LR=3e-4"
+  # 4. Both levers stacked. The swing for the fences.
+  "TAG=f32_multistep_sigma2_lr3e-4 LR_SCHEDULE=multistep SIGMA=2 LR=3e-4"
+  # 5. Regularization probe: AdamW decoupled weight decay on the step baseline.
+  "TAG=f32_multistep_adamw_wd1e-4 LR_SCHEDULE=multistep OPTIMIZER=AdamW WEIGHT_DECAY=1e-4"
+  # 6. Aggressive schedule: drop lr at 15/30 instead of 20/40. The 9.24 landed exactly when lr hit 1e-6 at
+  #    epoch 40, so reaching the floor sooner may reach the minimum sooner/lower.
+  "TAG=f32_multistep_ms15-30 LR_SCHEDULE=multistep MILESTONES=15,30"
 )
 
 # --wait: hold off until the GPU has no training process on it, so this can be queued

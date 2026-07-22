@@ -1,3 +1,9 @@
-timestamp,tag,dataset,final_epoch,early_stopped,best_val_mae,optimizer,lr,lr_schedule,lr_t_max,batch_size,backprop_step,frame_len,features,sigma,norm
-2026-07-14 16:25:35,avec_publish,avec14,110,True,13.486,Adam,0.0001,MultiStepLR,,5,10,64,16,0,batchnorm
-2026-07-21 12:57:48,avec_features32_gn,avec14,90,True,9.2421,Adam,0.0001,MultiStepLR,,1,50,64,32,0,groupnorm
+timestamp,tag,dataset,final_epoch,early_stopped,best_val_mae,optimizer,lr,weight_decay,lr_schedule,lr_t_max,milestones,batch_size,backprop_step,frame_len,features,sigma,norm
+2026-07-14 16:25:35,avec_publish,avec14,110,True,13.486,Adam,0.0001,0,MultiStepLR,,,5,10,64,16,0,batchnorm
+2026-07-21 12:57:48,avec_features32_gn,avec14,90,True,9.2421,Adam,0.0001,0,MultiStepLR,,"20,40",1,50,64,32,0,groupnorm
+2026-07-21 16:33:24,avec14_f32_lr0.0001_fl64_s0_groupnorm_run2,avec14,140,True,9.974,Adam,0.0001,0,CosineAnnealingLR,100,,1,50,64,32,0.0,groupnorm
+2026-07-21 17:41:16,avec14_f16_lr0.0001_fl64_s0_groupnorm,avec14,180,True,10.3258,Adam,0.0001,0,CosineAnnealingLR,100,,1,50,64,16,0.0,groupnorm
+2026-07-21 18:49:25,avec14_f48_lr0.0001_fl64_s0_groupnorm,avec14,80,True,10.4626,Adam,0.0001,0,CosineAnnealingLR,100,,1,50,64,48,0.0,groupnorm
+2026-07-21 19:57:33,avec14_f32_lr0.0001_fl64_s2_groupnorm,avec14,120,True,9.3634,Adam,0.0001,0,CosineAnnealingLR,100,,1,50,64,32,2.0,groupnorm
+2026-07-21 21:17:11,avec14_f32_lr0.0003_fl64_s0_groupnorm,avec14,140,True,9.5032,Adam,0.0003,0,CosineAnnealingLR,100,,1,50,64,32,0.0,groupnorm
+2026-07-21 22:44:08,avec14_f64_lr0.0001_fl32_s0_groupnorm,avec14,140,True,9.6315,Adam,0.0001,0,CosineAnnealingLR,100,,1,50,32,64,0.0,groupnorm
