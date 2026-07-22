@@ -16,17 +16,17 @@ DEVICE = torch.device('cuda')
 SCORE_RANGE = 63
 SAMPLE_INTERVAL = 3
 frame_len = 128
-features = 32
+features = 16  # published best.pth is an f16 model (use 32 for the avec_features32_gn checkpoint)
 BATCHSIZE = 2  # clips per forward pass; lower this if you hit CUDA OOM (8GB GPU can't fit 10 x 128-frame clips)
-TAG = 'avec_features32_gn'
+CKPT = 'weights/best.pth'  # published f16/BatchNorm model; for our f32/GN model use 'weights/avec_features32_gn/best.pth'
 
 
 # Generate the model.
-# norm_layer must match the run that produced the checkpoint: GroupNorm for avec_features32_gn
-# onwards, drop the argument for the older BatchNorm runs.
+# norm_layer must match the checkpoint: BatchNorm3d (norm_layer=None) for the published best.pth and
+# older runs; group_norm_3d(8) for avec_features32_gn onwards. features must match too (16 vs 32).
 Net = stanet_af(layers=[2, 2, 2, 2], in_channels=3, num_classes=1, k=2, features=features,
-                norm_layer=group_norm_3d(8))
-Net.load_state_dict(torch.load(f'weights/{TAG}/best.pth', weights_only=True, map_location=DEVICE))
+                norm_layer=None)
+Net.load_state_dict(torch.load(CKPT, weights_only=True, map_location=DEVICE))
 Net = Net.to(DEVICE)
 
 # loss function
