@@ -54,7 +54,9 @@ BACKPROP_STEP = _env_int('BACKPROP_STEP', 50)  # effective batch = BATCHSIZE * B
 VAL_STEP = _env_int('VAL_STEP', 10)
 EARLY_STOP_PATIENCE = _env_int('EARLY_STOP_PATIENCE', 5)  # early stopping: stop after this many consecutive validations with no val-MAE improvement (each validation = VAL_STEP epochs, so 5 -> 50 epochs of no progress)
 SCORE_RANGE = 63
-PRETRAIN = False
+PRETRAIN_CKPT = _env('PRETRAIN_CKPT', '')  # path to a checkpoint to initialise from; '' trains from scratch.
+                                           # The published weights/best.pth is an f16 model, so FEATURES must be 16
+                                           # to use it -- an f32 model shares no tensor shapes with it at all.
 DATASET = _env('DATASET', 'avec14')
 SAMPLE_INTERVAL = _env_int('SAMPLE_INTERVAL', 3)
 optimizer_name = _env('OPTIMIZER', 'Adam')  # any torch.optim class, e.g. Adam or AdamW (AdamW gives decoupled weight decay)
@@ -123,8 +125,25 @@ Net = stanet_af(layers=[2, 2, 2, 2], in_channels=3, num_classes=1, k=2, features
                 norm_layer=NORM_LAYER)
 # Net = torch.nn.DataParallel(Net)
 Net = Net.to(DEVICE)
-if PRETRAIN:
-    Net.load_state_dict(torch.load('weights/avec_all_train/100.pth', weights_only=True, map_location=DEVICE))
+if PRETRAIN_CKPT:
+    # strict=False on purpose: loading the authors' BatchNorm checkpoint into a GroupNorm model
+    # leaves its running_mean/running_var/num_batches_tracked unmatched, which is correct --
+    # GroupNorm has no running stats. Every *parameter* still transfers. Abort if any weight
+    # tensor failed to load, so a silently-random model can never be mistaken for a fine-tune.
+    _state = torch.load(PRETRAIN_CKPT, weights_only=True, map_location=DEVICE)
+    try:
+        _missing, _unexpected = Net.load_state_dict(_state, strict=False)
+    except RuntimeError as _e:
+        raise RuntimeError(
+            f'{PRETRAIN_CKPT} does not fit a FEATURES={features} model -- the tensor shapes '
+            f'differ. weights/best.pth is an f16 model and needs FEATURES=16.') from _e
+    if _missing:
+        raise RuntimeError(
+            f'{len(_missing)} tensors in the model got no weights from {PRETRAIN_CKPT}, '
+            f'e.g. {_missing[:3]}. FEATURES={features} probably does not match the checkpoint '
+            f'(weights/best.pth needs FEATURES=16).')
+    print(f'initialised from {PRETRAIN_CKPT}: {len(_state) - len(_unexpected)} tensors loaded, '
+          f'{len(_unexpected)} skipped (BatchNorm running stats if NORM=groupnorm)')
 
 # Generate the optimizers.
 optimizer = getattr(optim, optimizer_name)(Net.parameters(), lr=lr, weight_decay=WEIGHT_DECAY)
